@@ -702,6 +702,13 @@ svg.leaflet-image-layer.leaflet-interactive path {
   #stopPlay{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:1300;
     background:rgba(20,20,20,.82);color:#fff;border:0;border-radius:12px;padding:10px 20px;
     font-size:15px;font-weight:600;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.3);}
+  #yearlist{position:absolute;top:62px;left:10px;z-index:1100;background:rgba(255,255,255,.97);
+    border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,.22);padding:6px;display:none;
+    max-height:70vh;overflow-y:auto;width:180px;}
+  .yritem{display:block;width:100%;border:0;background:#eef0f4;border-radius:8px;padding:7px 10px;
+    margin:3px 0;font-size:13px;text-align:left;cursor:pointer;color:#222;}
+  .yritem:hover{background:#e2e5ec;}
+  .yritem.cur{background:#2b6cff;color:#fff;}
   .country-label{font-size:11px;font-weight:600;color:#222;text-shadow:0 0 3px #fff,0 0 3px #fff;
     background:none;border:none;box-shadow:none;white-space:nowrap;}
   .leaflet-container{cursor:grab;}
@@ -718,8 +725,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
   <button class="btn" id="btnRedo" title="Вернуть">⏩</button>
   <button class="btn" id="btnRec" title="Запись изменений">⏺</button>
   <button class="btn" id="btnPlay" title="Проиграть запись">▶️</button>
+  <button class="btn" id="btnYear" title="Год: границы выбранной эпохи">🕰</button>
 </div>
 <div id="reclist"></div>
+<div id="yearlist"></div>
 <div id="toast"></div>
 <div id="ver"></div>
 
@@ -830,12 +839,14 @@ window.EUROPE_GEOJSON={"type":"FeatureCollection","features":[{"type":"Feature",
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }
 
 // отметка версии (дата/время сборки по Риге) — чтобы видеть, обновилось ли
-const BUILD='14.07.2026 10:31';
+const BUILD='03.09.2026 18:08';
 try{ document.getElementById('ver').textContent = (BUILD.indexOf('__')===0)?'' : ('верс. '+BUILD); }catch(e){}
 
 const map = L.map('map',{minZoom:2,maxZoom:11,zoomControl:false,worldCopyJump:true}).setView([25,10],2);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
-  attribution:'© OpenStreetMap © CARTO', subdomains:'abcd', maxZoom:19
+// подложка: Esri Light Gray Canvas (бесплатно, без ключа). CARTO с 2026 требует API-ключ и
+// печатает «API KEY REQUIRED» прямо в плитку — поэтому ушли с неё.
+L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',{
+  attribution:'Tiles © Esri', maxZoom:16
 }).addTo(map);
 
 // ---- стабильный цвет для каждой страны (золотое сечение по тону) ----
@@ -860,6 +871,14 @@ let toastT=null;         // таймер всплывающей подсказк
 let layerGroup = L.layerGroup().addTo(map);
 let labelGroup = L.layerGroup().addTo(map);
 
+// ---- годы (исторические срезы границ, historical-basemaps) ----
+// 'now' = современные границы, вшиты в europe.js. Остальные подтягиваются файлом с сервера.
+const YEARS=[100,200,300,400,500,600,700,800,900,1000,1100,1200,1279,1300,1400,1492,1500,1530,
+             1600,1650,1700,1715,1783,1800,1815,1880,1900,1914,1920,1930,1938,1945,1960,1994,2000,2010];
+let curYear='now';
+try{ curYear = localStorage.getItem('warmap_year') || 'now'; }catch(e){}
+let curGeo=null;          // кэш последнего загруженного года (для 🔄 сброса без повторной загрузки)
+
 // ---- загрузка реальных границ (вшиты в europe.js) ----
 (function init(){
   const geo = window.EUROPE_GEOJSON;
@@ -872,6 +891,58 @@ let labelGroup = L.layerGroup().addTo(map);
   Object.keys(state).forEach(n=>{ if(state[n]&&state[n].geometry) state[n].geometry=fillHoles(state[n].geometry); });
   render();
 })();
+
+// загрузить срез года и построить карту заново
+async function loadYear(y){
+  if(y==='now'){
+    curGeo=null; curYear='now';
+    try{ localStorage.setItem('warmap_year','now'); }catch(e){}
+    buildState(window.EUROPE_GEOJSON); active=null; history=[]; redo=[]; render(); save(); updateUndo();
+    hint('Границы: наше время'); return true;
+  }
+  hint('Загружаю '+y+' год…');
+  try{
+    const r = await fetch('years/world_'+y+'.json', {cache:'force-cache'});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const geo = await r.json();
+    if(!geo || !geo.features || !geo.features.length) throw new Error('пусто');
+    curGeo=geo; curYear=String(y);
+    try{ localStorage.setItem('warmap_year', curYear); }catch(e){}
+    buildState(geo); active=null; history=[]; redo=[]; render(); save(); updateUndo();
+    hint(y+' год: '+geo.features.length+' стран');
+    return true;
+  }catch(e){
+    hint('Не удалось загрузить '+y+' год (нужен интернет)');
+    return false;
+  }
+}
+// вернуть карту к чистым границам ТЕКУЩЕГО года
+async function resetToCurYear(){
+  if(curYear==='now'){ return loadYear('now'); }
+  if(curGeo){
+    buildState(curGeo); active=null; history=[]; redo=[]; render(); save(); updateUndo();
+    hint('Сброшено к '+curYear+' году'); return true;
+  }
+  return loadYear(curYear);
+}
+function renderYearList(){
+  const el=document.getElementById('yearlist'); el.innerHTML='';
+  const mk=(label,val)=>{
+    const b=document.createElement('button'); b.className='yritem'+(String(val)===String(curYear)?' cur':'');
+    b.textContent=label;
+    b.onclick=async()=>{ el.style.display='none'; await loadYear(val); };
+    el.appendChild(b);
+  };
+  mk('Наше время','now');
+  YEARS.slice().reverse().forEach(y=>mk(y+' год', y));
+}
+document.getElementById('btnYear').onclick=()=>{
+  if(playing) return;
+  const el=document.getElementById('yearlist');
+  if(el.style.display==='block'){ el.style.display='none'; return; }
+  document.getElementById('reclist').style.display='none';
+  renderYearList(); el.style.display='block';
+};
 
 function buildState(geo){
   state={};
@@ -935,8 +1006,8 @@ function setMode(m){
 
 const btnUndo=document.getElementById('btnUndo'), btnRedo=document.getElementById('btnRedo');
 document.getElementById('btnReset').onclick=()=>{
-  localStorage.removeItem('warmap');
-  buildState(window.EUROPE_GEOJSON); active=null; history=[]; redo=[]; render(); updateUndo();
+  try{ localStorage.removeItem('warmap'); }catch(e){}
+  resetToCurYear();     // сброс к чистым границам ВЫБРАННОГО года, а не всегда к нашему времени
 };
 btnUndo.onclick=()=>{
   if(!history.length) return;
