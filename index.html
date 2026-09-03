@@ -861,7 +861,7 @@ window.EUROPE_GEOJSON={"type":"FeatureCollection","features":[{"type":"Feature",
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }
 
 // отметка версии (дата/время сборки по Риге) — чтобы видеть, обновилось ли
-const BUILD='03.09.2026 22:45';
+const BUILD='03.09.2026 22:49';
 try{ document.getElementById('ver').textContent = (BUILD.indexOf('__')===0)?'' : ('верс. '+BUILD); }catch(e){}
 
 const map = L.map('map',{minZoom:2,maxZoom:11,zoomControl:false,worldCopyJump:true}).setView([25,10],2);
@@ -920,6 +920,7 @@ let curGeo=null;          // кэш последнего загруженног�
 
 // загрузить срез года и построить карту заново
 async function loadYear(y){
+  closeDlg();                                  // state будет заменён — открытый диалог указывал бы в пустоту
   if(y==='now'){
     curGeo=null; curYear='now';
     try{ localStorage.setItem('warmap_year','now'); }catch(e){}
@@ -945,6 +946,7 @@ async function loadYear(y){
 }
 // вернуть карту к чистым границам ТЕКУЩЕГО года
 async function resetToCurYear(){
+  closeDlg();
   if(curYear==='now'){ return loadYear('now'); }
   if(curGeo){
     buildState(curGeo); active=null; history=[]; redo=[]; render(); save(); updateUndo();
@@ -997,6 +999,7 @@ function render(){
         }
       });
       lyr.on('click',ev=>{
+        if(playing) return;                      // во время проигрывания карта только смотрится
         if(mode==='select'){ setActive(name); L.DomEvent.stop(ev); }
         else if(mode==='name'){ openNameDlg(name); L.DomEvent.stop(ev); }
         else if(mode==='ball'){ openBallDlg(name); L.DomEvent.stop(ev); }
@@ -1056,11 +1059,13 @@ document.getElementById('btnReset').onclick=()=>{
 };
 btnUndo.onclick=()=>{
   if(!history.length) return;
+  closeDlg();
   try{ redo.push(JSON.stringify(state)); state=JSON.parse(history.pop()); render(); save(); }catch(e){}
   updateUndo();
 };
 btnRedo.onclick=()=>{
   if(!redo.length) return;
+  closeDlg();
   try{ history.push(JSON.stringify(state)); state=JSON.parse(redo.pop()); render(); save(); }catch(e){}
   updateUndo();
 };
@@ -1136,6 +1141,7 @@ let playStop=false;
 async function playRecording(rec){
   if(playing || !rec || !rec.moves || !rec.moves.length) return;
   playing=true; playStop=false;
+  closeDlg();                                  // иначе диалог висит поверх записи и пишет чужое состояние
   const realState=JSON.stringify(state);
   const panel=document.querySelector('.panel');
   panel.style.display='none';                 // прячем панель — в кадре только смена границ
@@ -1615,7 +1621,7 @@ function renderDecor(){
 function flagCodeByName(q){
   const s=String(q||'').trim().toLowerCase();
   if(!s) return null;
-  if(FLAGS[s]) return s;                                   // ввели прямо код (lv, de)
+  if(Object.prototype.hasOwnProperty.call(FLAGS,s)) return s;   // ввели прямо код (lv, de)
   let exact=null, starts=null, has=null;
   for(const code in FLAGS){
     const n=FLAGS[code].toLowerCase();
@@ -1628,7 +1634,7 @@ function flagCodeByName(q){
 function emoByName(q){
   const s=String(q||'').trim().toLowerCase();
   if(!s) return 'happy';
-  if(EMOS[s]) return s;
+  if(Object.prototype.hasOwnProperty.call(EMOS,s)) return s;
   for(const k in EMOS){ if(EMOS[k].toLowerCase()===s) return k; }
   for(const k in EMOS){ if(k.indexOf(s)===0 || EMOS[k].toLowerCase().indexOf(s)===0) return k; }
   for(const k in EMOS){ if(k.indexOf(s)>=0 || EMOS[k].toLowerCase().indexOf(s)>=0) return k; }
@@ -1667,12 +1673,13 @@ function openNameDlg(name){
   setTimeout(()=>{ try{ inp.focus(); inp.select(); }catch(e){} },30);
   const apply=()=>{
     const v=inp.value.trim();
+    snapshot();                                // чтобы ⏪ отменяла и переименование
     if(v) f.label=v; else delete f.label;
     save(); render(); closeDlg(); hint(v?('Теперь: '+v):'Подпись убрана');
   };
   ok.onclick=apply;
   inp.onkeydown=e=>{ if(e.key==='Enter') apply(); if(e.key==='Escape') closeDlg(); };
-  del.onclick=()=>{ delete f.label; save(); render(); closeDlg(); hint('Подпись убрана'); };
+  del.onclick=()=>{ snapshot(); delete f.label; save(); render(); closeDlg(); hint('Подпись убрана'); };
   cancel.onclick=closeDlg;
 }
 
@@ -1700,6 +1707,7 @@ function openBallDlg(name){
     const code=flagCodeByName(iF.value);
     if(!code){ hint('Не нашёл такую страну для флага'); return; }
     const emo=emoByName(iE.value)||'happy';
+    snapshot();                                // чтобы ⏪ отменяла и кантрибол
     f.ball={code:code, emo:emo};
     save(); render(); closeDlg();
     hint('Кантрибол: '+FLAGS[code]+' · '+(EMOS[emo]||emo));
@@ -1707,7 +1715,7 @@ function openBallDlg(name){
   ok.onclick=apply;
   iE.onkeydown=e=>{ if(e.key==='Enter') apply(); if(e.key==='Escape') closeDlg(); };
   iF.onkeydown=e=>{ if(e.key==='Enter') iE.focus(); if(e.key==='Escape') closeDlg(); };
-  del.onclick=()=>{ delete f.ball; save(); render(); closeDlg(); hint('Кантрибол убран'); };
+  del.onclick=()=>{ snapshot(); delete f.ball; save(); render(); closeDlg(); hint('Кантрибол убран'); };
   cancel.onclick=closeDlg;
 }
 
