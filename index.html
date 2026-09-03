@@ -839,7 +839,7 @@ window.EUROPE_GEOJSON={"type":"FeatureCollection","features":[{"type":"Feature",
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }
 
 // отметка версии (дата/время сборки по Риге) — чтобы видеть, обновилось ли
-const BUILD='03.09.2026 18:08';
+const BUILD='03.09.2026 18:12';
 try{ document.getElementById('ver').textContent = (BUILD.indexOf('__')===0)?'' : ('верс. '+BUILD); }catch(e){}
 
 const map = L.map('map',{minZoom:2,maxZoom:11,zoomControl:false,worldCopyJump:true}).setView([25,10],2);
@@ -890,6 +890,9 @@ let curGeo=null;          // кэш последнего загруженног�
   // на всякий случай заливаем дырки и в сохранённой карте (старые сохранения)
   Object.keys(state).forEach(n=>{ if(state[n]&&state[n].geometry) state[n].geometry=fillHoles(state[n].geometry); });
   render();
+  // сохранёнки нет, но год выбран исторический -> подтянуть его, иначе покажем современные границы
+  // при подсвеченном в списке старом годе (расхождение warmap / warmap_year)
+  if(!saved && curYear!=='now'){ loadYear(curYear).then(ok=>{ if(!ok){ curYear='now'; try{ localStorage.setItem('warmap_year','now'); }catch(e){} } }); }
 })();
 
 // загрузить срез года и построить карту заново
@@ -912,7 +915,8 @@ async function loadYear(y){
     hint(y+' год: '+geo.features.length+' стран');
     return true;
   }catch(e){
-    hint('Не удалось загрузить '+y+' год (нужен интернет)');
+    const nf = String(e && e.message||'').indexOf('HTTP 404')>=0;
+    hint(nf ? ('Нет файла для '+y+' года') : ('Не удалось загрузить '+y+' год — нужен интернет'));
     return false;
   }
 }
@@ -1006,8 +1010,10 @@ function setMode(m){
 
 const btnUndo=document.getElementById('btnUndo'), btnRedo=document.getElementById('btnRedo');
 document.getElementById('btnReset').onclick=()=>{
-  try{ localStorage.removeItem('warmap'); }catch(e){}
-  resetToCurYear();     // сброс к чистым границам ВЫБРАННОГО года, а не всегда к нашему времени
+  // сброс к чистым границам ВЫБРАННОГО года (а не всегда к нашему времени).
+  // Сохранёнку НЕ стираем заранее: resetToCurYear сам перезапишет её при успехе,
+  // иначе (упавшая загрузка) осталась бы пустая память при живой карте на экране.
+  resetToCurYear();
 };
 btnUndo.onclick=()=>{
   if(!history.length) return;
@@ -1083,6 +1089,7 @@ function toggleRecList(){
   if(playing) return;
   const el=document.getElementById('reclist');
   if(el.style.display==='block'){ el.style.display='none'; return; }
+  const yl=document.getElementById('yearlist'); if(yl) yl.style.display='none';  // не накладываться на список годов
   renderRecList(); el.style.display='block';
 }
 function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
