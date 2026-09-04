@@ -714,7 +714,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
   /* кантрибол: круг с флагом + глаза поверх */
   .cball{background:none;border:none;pointer-events:none;}
   .cball .cb-wrap{position:relative;width:100%;height:100%;border-radius:50%;overflow:hidden;
-    border:2px solid rgba(0,0,0,.65);box-shadow:0 2px 6px rgba(0,0,0,.35);background:#ddd;}
+    border:1.5px solid rgba(0,0,0,.5);box-shadow:0 2px 6px rgba(0,0,0,.3);background:#ddd;}
   .cball .cb-flag{position:absolute;inset:0;background-size:cover;background-position:center;}
   .cball svg{position:absolute;inset:0;width:100%;height:100%;}
   /* диалог названия / кантрибола */
@@ -861,7 +861,7 @@ window.EUROPE_GEOJSON={"type":"FeatureCollection","features":[{"type":"Feature",
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }
 
 // отметка версии (дата/время сборки по Риге) — чтобы видеть, обновилось ли
-const BUILD='03.09.2026 22:49';
+const BUILD='04.09.2026 17:28';
 try{ document.getElementById('ver').textContent = (BUILD.indexOf('__')===0)?'' : ('верс. '+BUILD); }catch(e){}
 
 const map = L.map('map',{minZoom:2,maxZoom:11,zoomControl:false,worldCopyJump:true}).setView([25,10],2);
@@ -1525,48 +1525,48 @@ const FLAGS={"ad":"Andorra","ae":"United Arab Emirates","af":"Afghanistan","ag":
 
 // эмоции кантриболов (ключ = как в англоязычной культуре кантриболов)
 const EMOS={
-  happy:'радость', angry:'злость', sad:'грусть', crying:'плач', smug:'ухмылка',
+  neutral:'обычный', happy:'радость', angry:'злость', sad:'грусть', crying:'плач', smug:'ухмылка',
   surprised:'удивление', dead:'мёртвый', confused:'растерянность', evil:'злодей', sleepy:'сонный'
 };
-// мордочка кантрибола: белые глаза + зрачки, брови/рот по эмоции. viewBox 40x40.
+// Мордочка в стиле кантриболов: глаза = белые формы с тонкой тёмной окантовкой (чтобы читались
+// и на белых полосах флага), БЕЗ зрачков и БЕЗ рта. Эмоцию задаёт только ФОРМА глаз. viewBox 40x40.
 function faceSVG(emo){
-  const eye=(cx,ry)=>'<ellipse cx="'+cx+'" cy="17" rx="7" ry="'+ry+'" fill="#fff" stroke="#111" stroke-width="1.2"/>';
-  const pup=(cx,cy,r)=>'<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="#111"/>';
-  const mouth=(d,w)=>'<path d="'+d+'" stroke="#111" stroke-width="'+(w||2)+'" fill="none" stroke-linecap="round"/>';
+  const F='fill="#fff" stroke="#141414" stroke-width="1.3" stroke-linejoin="round"';
+  const oval=(cx,cy,rx,ry)=>'<ellipse cx="'+cx+'" cy="'+(cy||18)+'" rx="'+(rx||6)+'" ry="'+(ry||7.5)+'" '+F+'/>';
+  const path=d=>'<path d="'+d+'" '+F+'/>';
+  // линия с тёмной подложкой — чтобы белый штрих был виден на светлом флаге
+  const line=d=>'<path d="'+d+'" fill="none" stroke="#141414" stroke-width="4.4" stroke-linecap="round"/>'
+              +'<path d="'+d+'" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>';
   let s='';
   switch(emo){
-    case 'angry':
-      s=eye(12,7)+eye(28,7)+pup(13,18,3.2)+pup(27,18,3.2)
-       +mouth('M4 8 L18 13',2.8)+mouth('M36 8 L22 13',2.8)+mouth('M13 31 Q20 26 27 31'); break;
-    case 'sad':
-      s=eye(12,7)+eye(28,7)+pup(12,19,3)+pup(28,19,3)
-       +mouth('M5 12 L18 8',2.4)+mouth('M35 12 L22 8',2.4)+mouth('M13 31 Q20 26 27 31'); break;
-    case 'crying':
-      s=eye(12,7)+eye(28,7)+pup(12,19,3)+pup(28,19,3)
-       +mouth('M5 12 L18 8',2.4)+mouth('M35 12 L22 8',2.4)+mouth('M13 32 Q20 26 27 32')
-       +'<path d="M11 24 q-2 5 0 7 q2-2 0-7" fill="#4aa3e0"/><path d="M29 24 q-2 5 0 7 q2-2 0-7" fill="#4aa3e0"/>'; break;
-    case 'smug':
-      s=eye(12,7)+eye(28,7)+pup(13,19,3)+pup(27,19,3)
-       +'<rect x="4" y="9" width="32" height="8" fill="#fff" opacity="0"/>'
-       +mouth('M5 14 L19 14',2.2)+mouth('M35 14 L21 14',2.2)+mouth('M13 29 Q20 33 27 27'); break;
-    case 'surprised':
-      s=eye(12,9)+eye(28,9)+pup(12,17,2.4)+pup(28,17,2.4)
-       +'<ellipse cx="20" cy="31" rx="3.5" ry="4.5" fill="#111"/>'; break;
-    case 'dead':
-      s=mouth('M8 12 L17 22',2.6)+mouth('M17 12 L8 22',2.6)+mouth('M23 12 L32 22',2.6)+mouth('M32 12 L23 22',2.6)
-       +mouth('M13 31 Q20 26 27 31'); break;
-    case 'confused':
-      s=eye(12,8)+eye(28,6)+pup(12,17,3)+pup(28,18,2.6)
-       +mouth('M5 9 L18 11',2.2)+mouth('M22 10 Q28 6 34 10',2.2)+mouth('M13 30 Q17 27 20 30 Q23 33 27 29'); break;
-    case 'evil':
-      s=eye(12,6)+eye(28,6)+pup(13,18,3)+pup(27,18,3)
-       +mouth('M4 9 L18 14',2.8)+mouth('M36 9 L22 14',2.8)
-       +mouth('M12 28 Q20 34 28 28')+mouth('M12 28 L28 28',1.6); break;
-    case 'sleepy':
-      s=mouth('M6 17 Q12 22 18 17',2.4)+mouth('M22 17 Q28 22 34 17',2.4)
-       +'<ellipse cx="20" cy="31" rx="2.6" ry="3.6" fill="#111"/>'; break;
-    default: // happy
-      s=eye(12,7)+eye(28,7)+pup(12,17,3.2)+pup(28,17,3.2)+mouth('M13 28 Q20 34 27 28');
+    case 'happy':      // закрытые дуги ∩ ∩
+      s=path('M7 20 A6 6.5 0 0 1 19 20 Z')+path('M21 20 A6 6.5 0 0 1 33 20 Z'); break;
+    case 'angry':      // внутренние края опущены
+      s=path('M7 13.5 L19 19.5 Q19.5 26 13 26 Q6.5 26 7 13.5 Z')
+       +path('M33 13.5 L21 19.5 Q20.5 26 27 26 Q33.5 26 33 13.5 Z'); break;
+    case 'sad':        // внешние края опущены
+      s=path('M7 19.5 L19 13.5 Q19.5 25.5 13 25.5 Q6.5 25.5 7 19.5 Z')
+       +path('M33 19.5 L21 13.5 Q20.5 25.5 27 25.5 Q33.5 25.5 33 19.5 Z'); break;
+    case 'crying':     // грустные глаза + слёзы
+      s=path('M7 19.5 L19 13.5 Q19.5 25.5 13 25.5 Q6.5 25.5 7 19.5 Z')
+       +path('M33 19.5 L21 13.5 Q20.5 25.5 27 25.5 Q33.5 25.5 33 19.5 Z')
+       +'<path d="M10 26.5 q-2.4 5 0 7 q2.4-2 0-7" fill="#6cc4f5" stroke="#141414" stroke-width="1"/>'
+       +'<path d="M30 26.5 q-2.4 5 0 7 q2.4-2 0-7" fill="#6cc4f5" stroke="#141414" stroke-width="1"/>'; break;
+    case 'smug':       // полуприкрытые: видна нижняя половина
+      s=path('M7 17 A6 6 0 0 0 19 17 Z')+path('M21 17 A6 6 0 0 0 33 17 Z'); break;
+    case 'surprised':  // большие круглые
+      s=oval(12.5,18,7,8.8)+oval(27.5,18,7,8.8); break;
+    case 'dead':       // крестики
+      s=line('M8.5 13 L17.5 24')+line('M17.5 13 L8.5 24')
+       +line('M22.5 13 L31.5 24')+line('M31.5 13 L22.5 24'); break;
+    case 'confused':   // один глаз меньше и выше
+      s=oval(13,18.5,6.2,7.8)+oval(27,16,4.4,5.2); break;
+    case 'evil':       // узкие наклонные щели
+      s=path('M6 15.5 L19 20 L19 24.5 L6 20 Z')+path('M34 15.5 L21 20 L21 24.5 L34 20 Z'); break;
+    case 'sleepy':     // закрытые веки ◡ ◡
+      s=line('M7 16.5 Q13 23 19 16.5')+line('M21 16.5 Q27 23 33 16.5'); break;
+    default:           // neutral — простые овалы
+      s=oval(13)+oval(27);
   }
   return '<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">'+s+'</svg>';
 }
@@ -1633,7 +1633,7 @@ function flagCodeByName(q){
 }
 function emoByName(q){
   const s=String(q||'').trim().toLowerCase();
-  if(!s) return 'happy';
+  if(!s) return 'neutral';        // не указали эмоцию -> обычная мордочка
   if(Object.prototype.hasOwnProperty.call(EMOS,s)) return s;
   for(const k in EMOS){ if(EMOS[k].toLowerCase()===s) return k; }
   for(const k in EMOS){ if(k.indexOf(s)===0 || EMOS[k].toLowerCase().indexOf(s)===0) return k; }
@@ -1706,7 +1706,7 @@ function openBallDlg(name){
   const apply=()=>{
     const code=flagCodeByName(iF.value);
     if(!code){ hint('Не нашёл такую страну для флага'); return; }
-    const emo=emoByName(iE.value)||'happy';
+    const emo=emoByName(iE.value)||'neutral';
     snapshot();                                // чтобы ⏪ отменяла и кантрибол
     f.ball={code:code, emo:emo};
     save(); render(); closeDlg();
